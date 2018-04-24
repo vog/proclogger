@@ -1,0 +1,81 @@
+#!/usr/bin/env python3
+
+'''proclogger - Log the creation, removal and changes of all running processes'''
+
+__copyright__ = '''\
+Copyright (C) Volker Diels-Grabsch <v@njh.eu>
+
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted, provided that the above
+copyright notice and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+'''
+
+from os import listdir
+from os.path import join
+from re import compile as re_compile
+from sys import stdout
+
+re_pid = re_compile('^[0-9]+$')
+
+def get_proc_field_data(pid, field):
+    try:
+        with open(join('/proc', str(pid), field), 'rb') as f:
+            return f.read()
+    except FileNotFoundError:
+        return b''
+
+def get_proc_cmdline(pid):
+    data = get_proc_field_data(pid, 'cmdline')
+    return [arg.decode('utf-8') for arg in data.strip(b'\x00').split(b'\x00')]
+
+def diff_procs(procs_before, procs_after):
+    pids_before = set(procs_before.keys())
+    pids_after = set(procs_after.keys())
+    return {
+        'created': {pid: procs_after[pid] for pid in pids_after - pids_before},
+        'changed': {pid: procs_after[pid] for pid in pids_after.intersection(pids_before) if procs_before[pid] != procs_after[pid]},
+        'removed': {pid: procs_before[pid] for pid in pids_before - pids_after},
+    }
+
+def render_diff(procdiff):
+    o = ''
+    for section in ['created', 'changed', 'removed']:
+        procs = procdiff[section]
+        for pid, proc in sorted(procs.items()):
+            if proc['cmdline'] == []:
+                continue
+            if proc['cmdline'] == ['']:
+                continue
+            o += section + ' ' + str(pid) + ': ' + ' '.join(proc['cmdline']) + '\n'
+    return o
+
+def get_procs():
+    procs = {}
+    for entry in listdir('/proc'):
+        if re_pid.match(entry) is None:
+            continue
+        pid = int(entry)
+        procs[pid] = {
+            'cmdline': get_proc_cmdline(pid),
+        }
+    return procs
+
+def main():
+    procs_before = get_procs()
+    while True:
+        procs_after = get_procs()
+        procdiff = diff_procs(procs_before, procs_after)
+        stdout.write(render_diff(procdiff))
+        stdout.flush()
+        procs_before = procs_after
+
+if __name__ == '__main__':
+    main()
