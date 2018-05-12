@@ -18,6 +18,7 @@ ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 '''
 
+from datetime import datetime
 from os import listdir
 from os.path import join
 from re import compile as re_compile
@@ -45,7 +46,7 @@ def diff_procs(procs_before, procs_after):
         'removed': {pid: procs_before[pid] for pid in pids_before - pids_after},
     }
 
-def render_diff(procdiff):
+def render_diff(procdiff, current_datetime):
     o = ''
     for section in ['created', 'changed', 'removed']:
         procs = procdiff[section]
@@ -54,7 +55,7 @@ def render_diff(procdiff):
                 continue
             if proc['cmdline'] == ['']:
                 continue
-            o += section + ' ' + str(pid) + ': ' + ' '.join(proc['cmdline']) + '\n'
+            o += '[' + current_datetime.strftime('%Y-%m-%d %H:%M:%S') + '] ' + section + ' ' + str(pid) + ': ' + ' '.join(proc['cmdline']) + '\n'
     return o
 
 def get_procs():
@@ -72,8 +73,9 @@ def main():
     procs_before = get_procs()
     while True:
         procs_after = get_procs()
+        current_datetime = datetime.now()
         procdiff = diff_procs(procs_before, procs_after)
-        stdout.write(render_diff(procdiff))
+        stdout.write(render_diff(procdiff, current_datetime))
         stdout.flush()
         procs_before = procs_after
 
